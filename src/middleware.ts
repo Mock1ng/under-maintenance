@@ -3,6 +3,7 @@ import { match } from "@formatjs/intl-localematcher";
 import Negotiator from "negotiator";
 
 const locales = ["en", "id"];
+const PUBLIC_FILE = /\.(.*)$/;
 
 const getLocale = (headers: Headers) => {
   const languages = new Negotiator({
@@ -14,6 +15,14 @@ const getLocale = (headers: Headers) => {
 };
 
 export function middleware(request: NextRequest) {
+  if (
+    request.nextUrl.pathname.startsWith("/_next") ||
+    request.nextUrl.pathname.includes("/api/") ||
+    PUBLIC_FILE.test(request.nextUrl.pathname)
+  ) {
+    return;
+  }
+
   const { pathname } = request.nextUrl;
   const locale = getLocale(request.headers);
 
@@ -21,20 +30,16 @@ export function middleware(request: NextRequest) {
     (locale) => pathname.startsWith(`/${locale}/`) || pathname === `/${locale}`
   );
 
-  if (pathnameHasLocale && pathname !== `/id`) return;
-  if (pathname === "/id") {
-    return NextResponse.redirect(new URL(`/`, request.nextUrl));
+  if (pathname === "/" && locale === "id") {
+    return NextResponse.rewrite(new URL("/id", request.url));
+  } else if (pathname === "/id" && locale === "id") {
+    return NextResponse.redirect(new URL("/", request.url));
+  } else {
+    if (pathnameHasLocale) return;
+    return NextResponse.redirect(new URL(`/${locale}${pathname}`, request.url));
   }
-  if (locale === "id") {
-    request.nextUrl.pathname = "/";
-    return NextResponse.rewrite(new URL(`/id`, request.nextUrl));
-  }
-
-  request.nextUrl.pathname = `/${locale}${pathname}`;
-
-  return NextResponse.redirect(request.nextUrl);
 }
 
 export const config = {
-  matcher: ["/((?!_next|icon.png).*)"]
+  matcher: ["/((?!_next).*)", "/"]
 };
